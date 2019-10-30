@@ -150,3 +150,55 @@ VOID SaveGuestVmcb12FromGuestVmcb02(_Inout_ PVIRTUAL_PROCESSOR_DATA VpData, _Ino
     SvDebugPrint("[SaveGuestVmcb12FromGuestVmcb02] pVmcbGuest02va->StateSaveArea.Rip  : %I64X \r\n", pVmcbGuest02va->StateSaveArea.Rip);
 
 }
+
+VMCB * GetCurrentVmcbGuest12(PVIRTUAL_PROCESSOR_DATA pVpdata)
+{
+    PVMCB pVmcbGuest12va = (PVMCB)UtilVaFromPa(VmmpGetVcpuVmx(pVpdata)->vmcb_guest_12_pa);
+    return pVmcbGuest12va;
+}
+
+VMCB * GetCurrentVmcbGuest02(PVIRTUAL_PROCESSOR_DATA pVpdata)
+{
+    PVMCB pVmcbGuest02va = (PVMCB)UtilVaFromPa(VmmpGetVcpuVmx(pVpdata)->vmcb_guest_02_pa);
+    return pVmcbGuest02va;
+}
+
+VOID HandleMsrReadAndWrite(
+_Inout_ PVIRTUAL_PROCESSOR_DATA VpData,
+    _Inout_ PGUEST_CONTEXT GuestContext)
+{
+    PVMCB pVmcbGuest02va = GetCurrentVmcbGuest02(VpData);
+    LARGE_INTEGER MsrValue = { 0 };
+    if (0 == pVmcbGuest02va->ControlArea.ExitInfo1) // read
+    {
+        Msr MsrNum = (Msr)GuestContext->VpRegs->Rcx;
+        MsrValue.QuadPart = UtilReadMsr64(MsrNum); // read from host
+
+        GuestContext->VpRegs->Rax = MsrValue.LowPart;
+        GuestContext->VpRegs->Rdx = MsrValue.HighPart;
+    }
+    else
+    {
+        Msr MsrNum = (Msr)GuestContext->VpRegs->Rcx;
+        MsrValue.LowPart = (ULONG)GuestContext->VpRegs->Rax;
+        MsrValue.HighPart = (ULONG)GuestContext->VpRegs->Rdx;
+        UtilWriteMsr64(MsrNum, MsrValue.QuadPart);
+    }
+}
+
+BOOL CheckVmcb12MsrBit(
+_Inout_ PVIRTUAL_PROCESSOR_DATA VpData,
+    _Inout_ PGUEST_CONTEXT GuestContext)
+{
+    PVMCB pVmcbGuest12va = GetCurrentVmcbGuest12(VpData);
+    PVOID MsrPermissionsMap = UtilVaFromPa(pVmcbGuest12va->ControlArea.MsrpmBasePa);
+    RTL_BITMAP bitmapHeader;
+    RtlInitializeBitMap(&bitmapHeader,
+        reinterpret_cast<PULONG>(MsrPermissionsMap),
+        SVM_MSR_PERMISSIONS_MAP_SIZE * CHAR_BIT
+    );
+
+
+
+    return TRUE;
+}
